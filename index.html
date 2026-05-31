@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>急救车药品记忆与考核系统</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f3f4f6;
+        }
+        .grid-cell {
+            transition: all 0.2s ease-in-out;
+        }
+        .grid-cell:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="heart-pulse" class="w-8 h-8 text-rose-300 animate-pulse"></i>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">急救车记忆助手</h1>
+                    <p class="text-xs text-teal-100">1.重症急诊 (第一层) 专训</p>
+                </div>
+            </div>
+            <div class="flex space-x-2 text-xs">
+                <button id="btn-reset-stats" class="bg-teal-700 hover:bg-teal-800 px-3 py-1.5 rounded transition flex items-center space-x-1">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    <span>重置统计</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        <!-- 顶部统计/卡片 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center space-x-3">
+                <div class="p-3 bg-teal-50 rounded-lg text-teal-600">
+                    <i data-lucide="book-open" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">已录入药品</p>
+                    <p class="text-lg font-bold text-slate-700" id="stat-total">14 种</p>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center space-x-3">
+                <div class="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+                    <i data-lucide="award" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">测试准确率</p>
+                    <p class="text-lg font-bold text-slate-700" id="stat-accuracy">100%</p>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center space-x-3">
+                <div class="p-3 bg-rose-50 rounded-lg text-rose-600">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">重点易错药</p>
+                    <p class="text-lg font-bold text-slate-700" id="stat-wrong-count">0 种</p>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center space-x-3">
+                <div class="p-3 bg-amber-50 rounded-lg text-amber-600">
+                    <i data-lucide="zap" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-400">记忆进度</p>
+                    <p class="text-lg font-bold text-slate-700" id="stat-progress">0%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导航 Tabs -->
+        <div class="flex border-b border-slate-200 mb-6 bg-white p-1 rounded-lg shadow-sm">
+            <button id="tab-study" class="flex-1 py-2.5 px-4 text-sm font-medium rounded-md text-teal-600 bg-teal-50 flex items-center justify-center space-x-2 transition">
+                <i data-lucide="map" class="w-4 h-4"></i>
+                <span>布局模式 (看图学习)</span>
+            </button>
+            <button id="tab-exam" class="flex-1 py-2.5 px-4 text-sm font-medium rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-2 transition">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                <span>科学考核 (模拟考试)</span>
+            </button>
+            <button id="tab-wrong" class="flex-1 py-2.5 px-4 text-sm font-medium rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-2 transition relative">
+                <i data-lucide="clipboard-x" class="w-4 h-4"></i>
+                <span>错题本</span>
+                <span id="wrong-badge" class="hidden absolute top-1 right-2 bg-rose-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">0</span>
+            </button>
+        </div>
+
+        <!-- ================= 1. 布局模式 (STUDY) ================= -->
+        <div id="section-study" class="space-y-6">
+            <!-- 功能条 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-3 items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-medium text-slate-600">辅助标记：</span>
+                    <button class="filter-btn text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition" data-filter="all">全部</button>
+                    <button class="filter-btn text-xs px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition" data-filter="high">高危药品</button>
+                    <button class="filter-btn text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition" data-filter="shade">遮光保存</button>
+                    <button class="filter-btn text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 transition" data-filter="lookalike">听似/疑似</button>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center">
+                    <i data-lucide="info" class="w-3.5 h-3.5 mr-1 text-slate-400"></i> 点击方格可查看大图与详情并听写
+                </div>
+            </div>
+
+            <!-- 急救车抽屉网格 (4行 x 5列) -->
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-100 overflow-x-auto">
+                <h3 class="text-center font-bold text-slate-800 text-lg mb-4">急救车第一层 抽屉实景图</h3>
+                
+                <!-- 真正的 4 x 5 抽屉网格容器 -->
+                <div class="min-w-[650px] grid grid-cols-6 gap-2 border-2 border-slate-300 p-3 bg-slate-100 rounded-lg">
+                    <!-- 左侧的一层标签跨4行 -->
+                    <div class="col-span-1 row-span-4 bg-slate-300 rounded flex flex-col justify-center items-center font-bold text-slate-700 border-r-2 border-slate-400 py-12">
+                        <span class="text-xl tracking-widest leading-relaxed">一<br>层</span>
+                    </div>
+
+                    <!-- 网格格子 20个 (4行 x 5列) -->
+                    <div id="cabinet-grid-container" class="col-span-5 grid grid-cols-5 gap-2">
+                        <!-- 由JS渲染20个格子 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 选中的药品详情卡片 -->
+            <div id="detail-card" class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-0.5 bg-teal-100 text-teal-800 text-xs rounded-full font-medium" id="detail-pos">位置: A1</span>
+                            <span class="hidden" id="detail-tags"></span>
+                        </div>
+                        <h4 class="text-xl font-bold text-slate-800 mt-2" id="detail-name">盐酸肾上腺素注射液</h4>
+                        <p class="text-sm text-slate-500 mt-1" id="detail-spec">规格数量: 5支 | 1mg/ml</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="btn-speak" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="听音">
+                            <i data-lucide="volume-2" class="w-5 h-5"></i>
+                        </button>
+                        <button id="btn-mark-known" class="px-3 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-sm font-medium transition flex items-center space-x-1">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                            <span id="btn-mark-text">标记已掌握</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- 记忆锦囊 -->
+                <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
+                    <div class="space-y-1">
+                        <p class="font-semibold text-slate-700">📌 属性说明：</p>
+                        <p id="detail-desc">高危药品、需避光保存。临床常用于急救过敏性休克和心脏骤停。</p>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="font-semibold text-slate-700">💡 科学记忆法：</p>
+                        <p id="detail-tip">可以通过“肾上腺素配肾上异丙”的位置对比来加深印象，本品处于右下角E4位置。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 2. 科学考核模式 (EXAM) ================= -->
+        <div id="section-exam" class="space-y-6 hidden">
+            <!-- 考试配置 -->
+            <div id="exam-config" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center">
+                    <i data-lucide="settings" class="w-5 h-5 mr-2 text-teal-600"></i>
+                    定制您的考核卷
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">选择题型</label>
+                        <select id="exam-mode-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                            <option value="name_to_pos">根据药品名称 ➔ 找存放位置 (推荐)</option>
+                            <option value="pos_to_name">根据高亮位置 ➔ 猜药品名称</option>
+                            <option value="name_to_spec">根据药品名称 ➔ 选剂量/规格</option>
+                            <option value="mix">全能混合考核 (模拟真实考试)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">题量设定</label>
+                        <select id="exam-count-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                            <option value="5">速战速决 (5题)</option>
+                            <option value="10" selected>标准考核 (10题)</option>
+                            <option value="14">全库大满贯 (14题)</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="btn-start-exam" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition shadow-md flex items-center justify-center space-x-2">
+                    <i data-lucide="play" class="w-5 h-5"></i>
+                    <span>开始模拟考试</span>
+                </button>
+            </div>
+
+            <!-- 考试进行中 -->
+            <div id="exam-running" class="bg-white p-6 rounded-2xl shadow-md border border-slate-100 hidden space-y-6">
+                <!-- 进度条与题号 -->
+                <div class="flex justify-between items-center text-xs text-slate-400">
+                    <span id="exam-progress-text">题目 1 / 10</span>
+                    <span class="font-mono text-teal-600" id="exam-score-live">得分: 0</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2">
+                    <div id="exam-progress-bar" class="bg-teal-500 h-2 rounded-full transition-all duration-300" style="width: 10%"></div>
+                </div>
+
+                <!-- 题目展示区 -->
+                <div class="bg-slate-50 p-5 rounded-xl border border-slate-100 text-center">
+                    <p class="text-xs font-semibold tracking-wider text-teal-600 uppercase mb-1" id="exam-question-type">给药名找位置</p>
+                    <h4 class="text-2xl font-bold text-slate-800" id="exam-question-title">尼可刹米注射液</h4>
+                    <p class="text-xs text-slate-400 mt-1" id="exam-question-desc">请在下方急救车示意图中点击该药品的准确摆放位置</p>
+                </div>
+
+                <!-- 考试交互区: 格子盘 (当需要点格子答题时展示) -->
+                <div id="exam-interactive-grid" class="hidden overflow-x-auto">
+                    <div class="min-w-[600px] border border-slate-200 p-2.5 bg-slate-100 rounded-lg grid grid-cols-6 gap-1.5">
+                        <div class="col-span-1 bg-slate-200 rounded flex items-center justify-center font-bold text-slate-500">一层</div>
+                        <div class="col-span-5 grid grid-cols-5 gap-1.5" id="exam-clickable-grid">
+                            <!-- 动态注入待选择的无字格子 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 考试交互区: 选择题选项 (当需要答文字时展示) -->
+                <div id="exam-interactive-options" class="grid grid-cols-1 md:grid-cols-2 gap-3 hidden">
+                    <!-- 动态注入按钮选项 -->
+                </div>
+
+                <!-- 下一步/反馈控制 -->
+                <div class="flex justify-between items-center pt-4 border-t border-slate-100">
+                    <span id="answer-feedback" class="text-sm font-semibold"></span>
+                    <button id="btn-next-question" class="hidden bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-1 transition">
+                        <span>下一题</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 考试结果页 -->
+            <div id="exam-result" class="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center hidden space-y-6">
+                <div class="w-20 h-20 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <i data-lucide="trophy" class="w-10 h-10"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">考试完成！</h3>
+                    <p class="text-slate-500 text-sm mt-1" id="result-meta">本次测试 10 题</p>
+                </div>
+                <div class="grid grid-cols-3 gap-2 max-w-sm mx-auto">
+                    <div class="bg-slate-50 p-3 rounded-lg border">
+                        <p class="text-xs text-slate-400">正确率</p>
+                        <p class="text-xl font-bold text-teal-600" id="result-accuracy">90%</p>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-lg border">
+                        <p class="text-xs text-slate-400">耗时</p>
+                        <p class="text-xl font-bold text-slate-700" id="result-time">45秒</p>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-lg border">
+                        <p class="text-xs text-slate-400">错题数</p>
+                        <p class="text-xl font-bold text-rose-500" id="result-wrong">1题</p>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-400 max-w-md mx-auto" id="result-tip">答错的题目已自动收录进您的专属“错题本”，可随时进行查漏补缺的针对性突击训练。</p>
+                <div class="flex space-x-3 justify-center">
+                    <button id="btn-restart-exam" class="bg-teal-600 hover:bg-teal-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition">再来一次</button>
+                    <button id="btn-go-wrong" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-6 py-2.5 rounded-lg text-sm transition">去消灭错题</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 3. 错题本模式 (WRONG) ================= -->
+        <div id="section-wrong" class="space-y-6 hidden">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">顽固错题攻坚区</h3>
+                        <p class="text-xs text-slate-400">只要答对一次，即可从错题本中移除，直到彻底清空！</p>
+                    </div>
+                    <button id="btn-clear-wrong" class="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center space-x-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        <span>清空错题</span>
+                    </button>
+                </div>
+
+                <!-- 错题为空展示 -->
+                <div id="wrong-empty" class="text-center py-12 text-slate-400 space-y-3">
+                    <i data-lucide="smile" class="w-12 h-12 mx-auto text-emerald-500"></i>
+                    <p class="text-sm font-medium text-slate-500">太棒了！目前没有记录任何错题。</p>
+                    <p class="text-xs text-slate-300">赶紧去进行“模拟考试”检验一下自己吧！</p>
+                </div>
+
+                <!-- 错题卡片列表 -->
+                <div id="wrong-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+                    <!-- 错题卡片动态注入 -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JS Logic -->
+    <script>
+        // ------------------ 1. 核心药品数据库定义 ------------------
+        // 基于图片“急救车平面示意图 1.重症急诊”第一层的数据录入
+        // 抽屉为4行5列的网格，坐标采用 row (1-4), col (1-5)。总共20个格子
+        const DRUG_DATABASE = [
+            { id: 1, row: 1, col: 1, name: "二羟丙茶碱注射液", count: "5支", spec: "0.3g/2ml", flags: ["high", "shade"], desc: "用于支气管哮喘、喘息型支气管炎等。", tip: "高危药，需遮光，位于 A1 位置" },
+            { id: 2, row: 1, col: 2, name: "盐酸多巴胺注射液", count: "5支", spec: "20mg/2ml", flags: ["high", "shade"], desc: "用于心肌梗死、创伤、内毒素败血症等引起的休克。", tip: "高危避光药，在 B1 位置" },
+            { id: 3, row: 1, col: 3, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此位置目前为空置状态。", tip: "C1 位置目前是空的" },
+            { id: 4, row: 1, col: 4, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此位置目前为空置状态。", tip: "D1 位置目前是空的" },
+            { id: 5, row: 1, col: 5, name: "地塞米松磷酸钠注射液", count: "5支", spec: "5mg/ml", flags: ["shade"], desc: "主要用于过敏性与自身免疫性炎症性疾病。", tip: "位于 E1，虽不是高危但需要遮光保存" },
+
+            { id: 6, row: 2, col: 1, name: "氨茶碱注射液", count: "5支", spec: "0.25g/10ml", flags: ["high", "shade"], desc: "适用于支气管哮喘、慢性阻塞性肺病等。", tip: "位于 A2，与上方二羟丙茶碱(同类药)对齐" },
+            { id: 7, row: 2, col: 2, name: "重酒石酸间羟胺注射液", count: "5支", spec: "10mg/ml", flags: ["high", "shade"], desc: "适用于防治椎管内阻滞麻醉时发生的急性低血压和辅助性休克治疗。", tip: "高危遮光，在 B2 位置" },
+            { id: 8, row: 2, col: 3, name: "地西泮注射液", count: "5支", spec: "10mg/2ml", flags: ["high", "second_psy", "shade"], desc: "用于抗癫痫、抗惊厥、镇静催眠及抗焦虑。", tip: "高危、二类精神药品(二精)，需避光，在 C2" },
+            { id: 9, row: 2, col: 4, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此位置目前为空置状态。", tip: "D2 位置目前是空的" },
+            { id: 10, row: 2, col: 5, name: "重酒石酸去甲肾上腺素注射液", count: "5支", spec: "2mg/ml", flags: ["high", "lookalike", "shade"], desc: "用于治疗急性心肌梗死、体外循环等引起的低血压。", tip: "位于 E2，高危避光，属于‘听似’易混淆药品（与肾上腺素）" },
+
+            { id: 11, row: 3, col: 1, name: "盐酸洛贝林注射液", count: "5支", spec: "3mg/ml", flags: ["shade"], desc: "主要用于新生儿窒息、一氧化碳中毒等引起的呼吸衰竭。", tip: "位于 A3，非高危但需避光" },
+            { id: 12, row: 3, col: 2, name: "呋塞米注射液", count: "5支", spec: "20mg/2ml", flags: ["shade"], desc: "强效利尿药，用于水肿性疾病、高血压、高钾血症等。", tip: "俗称速尿，在 B3 位置，需避光" },
+            { id: 13, row: 3, col: 3, name: "盐酸利多卡因注射液", count: "5支", spec: "0.1g/5ml", flags: ["high"], desc: "局麻药及抗心律失常药。", tip: "高危药，无需避光，在 C3 位置" },
+            { id: 14, row: 3, col: 4, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此位置目前为空置状态。", tip: "D3 位置目前是空的" },
+            { id: 15, row: 3, col: 5, name: "盐酸异丙肾上腺素注射液", count: "5支", spec: "1mg/2ml", flags: ["high", "lookalike", "shade"], desc: "用于治疗心源性或感染性休克，或治疗二、三度房室传导阻滞。", tip: "高危听似避光药，位于 E3 位置" },
+
+            { id: 16, row: 4, col: 1, name: "尼可刹米注射液", count: "5支", spec: "0.375g/1.5ml", flags: ["shade"], desc: "中枢呼吸兴奋药，用于中枢性呼吸抑制。", tip: "位于 A4，需避光" },
+            { id: 17, row: 4, col: 2, name: "去乙酰毛花苷注射液", count: "5支", spec: "0.4mg/2ml", flags: ["high", "shade"], desc: "快速强心药，主要用于心力衰竭及心房颤动。", tip: "即西地兰，高危避光，在 B4 位置" },
+            { id: 18, row: 4, col: 3, name: "硫酸阿托品注射液", count: "5支", spec: "0.5mg/ml", flags: ["high"], desc: "抗胆碱药，用于解除内脏绞痛、抢救有机磷中毒及抗休克。", tip: "高危药，位于 C4 位置" },
+            { id: 19, row: 4, col: 4, name: "酚磺乙胺注射液", count: "5支", spec: "1g/5ml", flags: ["shade"], desc: "止血药，用于防治各种手术前后的出血。", tip: "位于 D4，非高危但需避光" },
+            { id: 20, row: 4, col: 5, name: "盐酸肾上腺素注射液", count: "5支", spec: "1mg/ml", flags: ["high", "shade"], desc: "抢救心搏骤停、过敏性休克的首选药物。", tip: "位于 E4（右下角压轴黄金位置），高危避光" }
+        ];
+
+        // ------------------ 2. 状态变量 ------------------
+        let currentTab = 'study';
+        let filterType = 'all';
+        let selectedDrug = DRUG_DATABASE[0];
+        let knownDrugs = JSON.parse(localStorage.getItem('knownDrugs') || '[]');
+        let wrongList = JSON.parse(localStorage.getItem('wrongDrugs') || '[]');
+        
+        // 考试数据
+        let examConfig = { mode: 'mix', count: 10 };
+        let examQuestions = [];
+        let examCurrentIndex = 0;
+        let examCorrectCount = 0;
+        let examStartTime = 0;
+        let selectedCellId = null;
+
+        // 全局统计数据
+        let stats = JSON.parse(localStorage.getItem('examStats') || '{"testsRun": 0, "correctSum": 0, "totalSum": 0}');
+
+        // ------------------ 3. DOM 元素 ------------------
+        const elements = {
+            cabinetGrid: document.getElementById('cabinet-grid-container'),
+            detailCard: document.getElementById('detail-card'),
+            detailPos: document.getElementById('detail-pos'),
+            detailTags: document.getElementById('detail-tags'),
+            detailName: document.getElementById('detail-name'),
+            detailSpec: document.getElementById('detail-spec'),
+            detailDesc: document.getElementById('detail-desc'),
+            detailTip: document.getElementById('detail-tip'),
+            btnSpeak: document.getElementById('btn-speak'),
+            btnMarkKnown: document.getElementById('btn-mark-known'),
+            btnMarkText: document.getElementById('btn-mark-text'),
+            tabStudy: document.getElementById('tab-study'),
+            tabExam: document.getElementById('tab-exam'),
+            tabWrong: document.getElementById('tab-wrong'),
+            sectionStudy: document.getElementById('section-study'),
+            sectionExam: document.getElementById('section-exam'),
+            sectionWrong: document.getElementById('section-wrong'),
+            wrongBadge: document.getElementById('wrong-badge'),
+            wrongEmpty: document.getElementById('wrong-empty'),
+            wrongList: document.getElementById('wrong-list'),
+            btnClearWrong: document.getElementById('btn-clear-wrong'),
+            btnResetStats: document.getElementById('btn-reset-stats'),
+            
+            // 考试 DOM
+            examConfig: document.getElementById('exam-config'),
+            examRunning: document.getElementById('exam-running'),
+            examResult: document.getElementById('exam-result'),
+            btnStartExam: document.getElementById('btn-start-exam'),
+            examProgressText: document.getElementById('exam-progress-text'),
+            examProgressBar: document.getElementById('exam-progress-bar'),
+            examScoreLive: document.getElementById('exam-score-live'),
+            examQuestionType: document.getElementById('exam-question-type'),
+            examQuestionTitle: document.getElementById('exam-question-title'),
+            examQuestionDesc: document.getElementById('exam-question-desc'),
+            examInteractiveGrid: document.getElementById('exam-interactive-grid'),
+            examClickableGrid: document.getElementById('exam-clickable-grid'),
+            examInteractiveOptions: document.getElementById('exam-interactive-options'),
+            answerFeedback: document.getElementById('answer-feedback'),
+            btnNextQuestion: document.getElementById('btn-next-question'),
+            
+            // 考试结果
+            resultMeta: document.getElementById('result-meta'),
+            resultAccuracy: document.getElementById('result-accuracy'),
+            resultTime: document.getElementById('result-time'),
+            resultWrong: document.getElementById('result-wrong'),
+            btnRestartExam: document.getElementById('btn-restart-exam'),
+            btnGoWrong: document.getElementById('btn-go-wrong')
+        };
+
+        // ------------------ 4. 统计信息渲染 ------------------
+        function updateStatsDashboard() {
+            const actualDrugsCount = DRUG_DATABASE.filter(d => d.flags[0] !== 'empty').length;
+            document.getElementById('stat-total').innerText = `${actualDrugsCount} 种`;
+            
+            // 进度
+            const progress = Math.round((knownDrugs.length / actualDrugsCount) * 100);
+            document.getElementById('stat-progress').innerText = `${progress}%`;
+            
+            // 错题
+            document.getElementById('stat-wrong-count').innerText = `${wrongList.length} 种`;
+            if (wrongList.length > 0) {
+                elements.wrongBadge.classList.remove('hidden');
+                elements.wrongBadge.innerText = wrongList.length;
+            } else {
+                elements.wrongBadge.classList.add('hidden');
+            }
+
+            // 准确率
+            if (stats.totalSum > 0) {
+                const acc = Math.round((stats.correctSum / stats.totalSum) * 100);
+                document.getElementById('stat-accuracy').innerText = `${acc}%`;
+            } else {
+                document.getElementById('stat-accuracy').innerText = '100%';
+            }
+        }
+
+        // ------------------ 5. 核心：抽屉网格生成 (STUDY 模式) ------------------
+        function renderStudyGrid() {
+            elements.cabinetGrid.innerHTML = '';
+            DRUG_DATABASE.forEach(drug => {
+                const isKnown = knownDrugs.includes(drug.id);
+                const isEmpty = drug.flags.includes('empty');
+                
+                // 颜色和标记配置
+                let cardClass = "relative border cursor-pointer select-none rounded-lg p-3 flex flex-col justify-between text-center min-h-[105px] bg-white text-slate-800 border-slate-200 ";
+                
+                if (isEmpty) {
+                    cardClass = "border border-dashed border-slate-300 bg-slate-50 opacity-40 text-slate-400 rounded-lg p-3 flex items-center justify-center min-h-[105px]";
+                }
+
+                // 过滤器激活效果
+                let filterMatched = true;
+                if (filterType === 'high' && !drug.flags.includes('high')) filterMatched = false;
+                if (filterType === 'shade' && !drug.flags.includes('shade')) filterMatched = false;
+                if (filterType === 'lookalike' && !drug.flags.includes('lookalike')) filterMatched = false;
+
+                if (!filterMatched && !isEmpty) {
+                    cardClass += " opacity-25";
+                }
+
+                // 高危、遮光底色辅助暗示
+                let tagBadges = '';
+                if (!isEmpty && filterMatched) {
+                    if (drug.flags.includes('high')) {
+                        cardClass += " hover:border-red-400";
+                    } else {
+                        cardClass += " hover:border-teal-400";
+                    }
+                }
+
+                const gridCell = document.createElement('div');
+                gridCell.className = cardClass;
+                gridCell.dataset.id = drug.id;
+
+                if (isEmpty) {
+                    gridCell.innerHTML = `<span class="text-xs text-slate-400">空置</span>`;
+                } else {
+                    // 构建各种高危/避光等标签小点
+                    let badgesHTML = '';
+                    if (drug.flags.includes('high')) {
+                        badgesHTML += `<span class="text-[9px] scale-90 px-1 bg-red-100 text-red-600 rounded">高危</span>`;
+                    }
+                    if (drug.flags.includes('shade')) {
+                        badgesHTML += `<span class="text-[9px] scale-90 px-1 bg-amber-100 text-amber-700 rounded">避光</span>`;
+                    }
+                    if (drug.flags.includes('second_psy')) {
+                        badgesHTML += `<span class="text-[9px] scale-90 px-1 bg-purple-100 text-purple-600 rounded">二精</span>`;
+                    }
+                    if (drug.flags.includes('lookalike')) {
+                        badgesHTML += `<span class="text-[9px] scale-90 px-1 bg-blue-100 text-blue-600 rounded">听似</span>`;
+                    }
+
+                    gridCell.innerHTML = `
+                        <div class="absolute top-1 left-1 text-[9px] font-mono font-bold text-slate-400">
+                            ${String.fromCharCode(64 + drug.col)}${drug.row}
+                        </div>
+                        <div class="flex flex-wrap gap-0.5 justify-end absolute top-1 right-1">
+                            ${badgesHTML}
+                        </div>
+                        <div class="text-xs font-bold leading-tight mt-3 text-slate-700">${drug.name}</div>
+                        <div class="text-[10px] text-slate-500 mt-1">${drug.count} | ${drug.spec}</div>
+                        ${isKnown ? `
+                            <div class="absolute bottom-1 right-1 text-emerald-500">
+                                <i data-lucide="check-circle" class="w-3.5 h-3.5 fill-emerald-50"></i>
+                            </div>
+                        ` : ''}
+                    `;
+                }
+
+                // 点击事件
+                if (!isEmpty) {
+                    gridCell.addEventListener('click', () => {
+                        selectDrugItem(drug);
+                        // 高亮当前选中格子
+                        document.querySelectorAll('.grid-cell-active').forEach(el => el.classList.remove('grid-cell-active', 'ring-2', 'ring-teal-500'));
+                        gridCell.classList.add('grid-cell-active', 'ring-2', 'ring-teal-500');
+                    });
+                }
+
+                elements.cabinetGrid.appendChild(gridCell);
+            });
+            lucide.createIcons();
+        }
+
+        // 选中某个药品展示详情
+        function selectDrugItem(drug) {
+            selectedDrug = drug;
+            elements.detailCard.classList.remove('hidden');
+            
+            elements.detailPos.innerText = `位置: ${String.fromCharCode(64 + drug.col)}${drug.row} (第${drug.row}行, 第${drug.col}列)`;
+            elements.detailName.innerText = drug.name;
+            elements.detailSpec.innerText = `规格数量: ${drug.count} / ${drug.spec}`;
+            elements.detailDesc.innerText = drug.desc;
+            elements.detailTip.innerText = drug.tip;
+
+            // 掌握按钮文案
+            const isKnown = knownDrugs.includes(drug.id);
+            if (isKnown) {
+                elements.btnMarkText.innerText = "已掌握 (点击取消)";
+                elements.btnMarkKnown.className = "px-3 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium transition flex items-center space-x-1";
+            } else {
+                elements.btnMarkText.innerText = "标记已掌握";
+                elements.btnMarkKnown.className = "px-3 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-sm font-medium transition flex items-center space-x-1";
+            }
+
+            // 朗读
+            elements.btnSpeak.onclick = () => {
+                speakText(drug.name);
+            };
+
+            // 标签渲染
+            elements.detailTags.className = "flex space-x-1 mt-1";
+            let tagsHTML = '';
+            if (drug.flags.includes('high')) {
+                tagsHTML += `<span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold">高危</span>`;
+            }
+            if (drug.flags.includes('shade')) {
+                tagsHTML += `<span class="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">避光</span>`;
+            }
+            if (drug.flags.includes('second_psy')) {
+                tagsHTML += `<span class="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold">二类精神药品</span>`;
+            }
+            if (drug.flags.includes('lookalike')) {
+                tagsHTML += `<span class="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">易混淆听似</span>`;
+            }
+            elements.detailTags.innerHTML = tagsHTML;
+        }
+
+        // 朗读语音函数
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // 掌握标记功能
+        elements.btnMarkKnown.addEventListener('click', () => {
+            if (!selectedDrug) return;
+            const idx = knownDrugs.indexOf(selectedDrug.id);
+            if (idx > -1) {
+                knownDrugs.splice(idx, 1);
+            } else {
+                knownDrugs.push(selectedDrug.id);
+            }
+            localStorage.setItem('knownDrugs', JSON.stringify(knownDrugs));
+            updateStatsDashboard();
+            renderStudyGrid();
+            selectDrugItem(selectedDrug); // 刷新
+        });
+
+        // 过滤器逻辑
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-teal-600', 'text-white'));
+                filterType = e.target.dataset.filter;
+                renderStudyGrid();
+            });
+        });
+
+        // ------------------ 6. 科学考核模式 (EXAM LOGIC) ------------------
+        
+        // 随机混淆数组
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        // 开启考试
+        elements.btnStartExam.addEventListener('click', () => {
+            const mode = document.getElementById('exam-mode-select').value;
+            const count = parseInt(document.getElementById('exam-count-select').value);
+            
+            // 过滤掉空置的格子，只考有药品的格子
+            const validDrugs = DRUG_DATABASE.filter(d => !d.flags.includes('empty'));
+            
+            if (validDrugs.length === 0) return;
+
+            examQuestions = [];
+            examConfig = { mode, count };
+            
+            // 抽取题目
+            let shuffled = shuffle([...validDrugs]);
+            let qCount = Math.min(count, shuffled.length);
+            
+            for (let i = 0; i < qCount; i++) {
+                const drug = shuffled[i];
+                let type = mode;
+                if (mode === 'mix') {
+                    const modes = ['name_to_pos', 'pos_to_name', 'name_to_spec'];
+                    type = modes[Math.floor(Math.random() * modes.length)];
+                }
+                examQuestions.push({ drug, type });
+            }
+
+            examCurrentIndex = 0;
+            examCorrectCount = 0;
+            examStartTime = Date.now();
+            
+            elements.examConfig.classList.add('hidden');
+            elements.examResult.classList.add('hidden');
+            elements.examRunning.classList.remove('hidden');
+            
+            renderQuestion();
+        });
+
+        // 渲染单道题
+        function renderQuestion() {
+            elements.answerFeedback.innerText = '';
+            elements.btnNextQuestion.classList.add('hidden');
+            elements.examInteractiveGrid.classList.add('hidden');
+            elements.examInteractiveOptions.classList.add('hidden');
+
+            const current = examQuestions[examCurrentIndex];
+            const drug = current.drug;
+            const qNum = examCurrentIndex + 1;
+            
+            elements.examProgressText.innerText = `题目 ${qNum} / ${examQuestions.length}`;
+            elements.examProgressBar.style.width = `${(qNum / examQuestions.length) * 100}%`;
+            elements.examScoreLive.innerText = `当前答对: ${examCorrectCount}`;
+
+            // A1, B3 格式位置 (列Letter + 行Row)
+            const posLabel = `${String.fromCharCode(64 + drug.col)}${drug.row}`;
+
+            if (current.type === 'name_to_pos') {
+                // 1. 给药名找位置
+                elements.examQuestionType.innerText = "题型：定位找格";
+                elements.examQuestionTitle.innerText = drug.name;
+                elements.examQuestionDesc.innerHTML = `请点击该药品在下方急救车抽屉中的 <strong class="text-teal-600">摆放位置</strong>`;
+                
+                elements.examInteractiveGrid.classList.remove('hidden');
+                renderExamClickableGrid();
+            } 
+            else if (current.type === 'pos_to_name') {
+                // 2. 给位置猜药名
+                elements.examQuestionType.innerText = "题型：看位置猜药名";
+                elements.examQuestionTitle.innerText = `位置: ${posLabel}`;
+                elements.examQuestionDesc.innerHTML = `红圈标记的位置存放的是哪种药？`;
+
+                // 准备4个混淆选项 (1个正确，3个随机)
+                const others = DRUG_DATABASE.filter(d => d.id !== drug.id && !d.flags.includes('empty'));
+                const shuffledOthers = shuffle(others).slice(0, 3);
+                const options = shuffle([drug, ...shuffledOthers]);
+
+                elements.examInteractiveOptions.classList.remove('hidden');
+                elements.examInteractiveOptions.innerHTML = '';
+                
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = "option-btn bg-white hover:bg-slate-50 text-slate-800 font-medium py-3.5 px-4 rounded-xl border border-slate-200 text-left transition text-sm flex items-center justify-between";
+                    btn.innerHTML = `<span>${opt.name}</span> <span class="text-xs text-slate-400 font-mono">${opt.spec}</span>`;
+                    btn.onclick = () => submitAnswer(opt.id === drug.id, btn);
+                    elements.examInteractiveOptions.appendChild(btn);
+                });
+
+                // 可选：同时显示不可点击的网格布局，高亮当前位置，辅助看图
+                elements.examInteractiveGrid.classList.remove('hidden');
+                renderExamClickableGrid(drug.id, true); // 只读高亮模式
+            }
+            else if (current.type === 'name_to_spec') {
+                // 3. 给药名选规格
+                elements.examQuestionType.innerText = "题型：记剂量规格";
+                elements.examQuestionTitle.innerText = drug.name;
+                elements.examQuestionDesc.innerHTML = `该药品的 <strong class="text-teal-600">数量和规格含量</strong> 是什么？`;
+
+                // 准备4个规格选项 (不能重复)
+                const candidateSpecs = [
+                    `${drug.count} | ${drug.spec}`,
+                    "5支 | 10mg/2ml",
+                    "5支 | 20mg/2ml",
+                    "5支 | 0.375g/1.5ml",
+                    "5支 | 1mg/ml",
+                    "5支 | 0.5mg/ml"
+                ];
+                // 去重
+                const uniqueCandidates = [...new Set(candidateSpecs)].slice(0, 4);
+                // 确保正确选项在里面
+                if (!uniqueCandidates.includes(`${drug.count} | ${drug.spec}`)) {
+                    uniqueCandidates[3] = `${drug.count} | ${drug.spec}`;
+                }
+                const options = shuffle(uniqueCandidates);
+
+                elements.examInteractiveOptions.classList.remove('hidden');
+                elements.examInteractiveOptions.innerHTML = '';
+
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = "option-btn bg-white hover:bg-slate-50 text-slate-800 font-medium py-4 px-4 rounded-xl border border-slate-200 text-center transition text-sm";
+                    btn.innerText = opt;
+                    btn.onclick = () => submitAnswer(opt === `${drug.count} | ${drug.spec}`, btn);
+                    elements.examInteractiveOptions.appendChild(btn);
+                });
+            }
+            lucide.createIcons();
+        }
+
+        // 渲染考试用到的格子面板
+        function renderExamClickableGrid(highlightId = null, readOnly = false) {
+            elements.examClickableGrid.innerHTML = '';
+            
+            DRUG_DATABASE.forEach(drug => {
+                const isEmpty = drug.flags.includes('empty');
+                let cellClass = "border text-center rounded flex flex-col justify-center items-center select-none text-[10px] min-h-[50px] transition font-bold font-mono ";
+                
+                if (isEmpty) {
+                    cellClass += "bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed";
+                } else if (readOnly) {
+                    if (drug.id === highlightId) {
+                        cellClass += "bg-rose-100 border-rose-400 text-rose-700 ring-2 ring-rose-400 animate-pulse";
+                    } else {
+                        cellClass += "bg-white text-slate-400 border-slate-100";
+                    }
+                } else {
+                    // 可点击定位题模式
+                    cellClass += "bg-white text-slate-600 border-slate-200 cursor-pointer hover:bg-teal-50 hover:border-teal-300";
+                }
+
+                const cell = document.createElement('div');
+                cell.className = cellClass;
+                cell.innerText = isEmpty ? '空' : `${String.fromCharCode(64 + drug.col)}${drug.row}`;
+
+                if (!isEmpty && !readOnly) {
+                    cell.onclick = () => {
+                        const correctDrug = examQuestions[examCurrentIndex].drug;
+                        const isCorrect = (drug.id === correctDrug.id);
+                        submitAnswer(isCorrect, cell);
+                    };
+                }
+
+                elements.examClickableGrid.appendChild(cell);
+            });
+        }
+
+        // 提交某道题的答案
+        function submitAnswer(isCorrect, element) {
+            // 防止重复点击
+            if (!elements.btnNextQuestion.classList.contains('hidden')) return;
+
+            const current = examQuestions[examCurrentIndex];
+            const drug = current.drug;
+
+            if (isCorrect) {
+                examCorrectCount++;
+                elements.answerFeedback.innerHTML = `<span class="text-emerald-600 flex items-center"><i data-lucide="check-circle" class="w-5 h-5 mr-1 fill-emerald-50"></i> 答对了！真棒！</span>`;
+                if (element) {
+                    element.classList.remove('bg-white', 'hover:bg-teal-50');
+                    element.classList.add('bg-emerald-100', 'border-emerald-400', 'text-emerald-700');
+                }
+            } else {
+                elements.answerFeedback.innerHTML = `<span class="text-rose-600 flex items-center"><i data-lucide="x-circle" class="w-5 h-5 mr-1 fill-rose-50"></i> 答错了，正确位置/规格为: <strong class="ml-1">${String.fromCharCode(64 + drug.col)}${drug.row} (${drug.spec})</strong></span>`;
+                if (element) {
+                    element.classList.remove('bg-white');
+                    element.classList.add('bg-rose-100', 'border-rose-400', 'text-rose-700');
+                }
+                // 加入错题本
+                addWrongDrug(drug.id);
+            }
+
+            elements.btnNextQuestion.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        // 下一题
+        elements.btnNextQuestion.addEventListener('click', () => {
+            examCurrentIndex++;
+            if (examCurrentIndex < examQuestions.length) {
+                renderQuestion();
+            } else {
+                finishExam();
+            }
+        });
+
+        // 考试完成结算
+        function finishExam() {
+            elements.examRunning.classList.add('hidden');
+            elements.examResult.classList.remove('hidden');
+
+            const total = examQuestions.length;
+            const accuracy = Math.round((examCorrectCount / total) * 100);
+            const timeSpent = Math.round((Date.now() - examStartTime) / 1000);
+
+            elements.resultMeta.innerText = `本次测试共 ${total} 题`;
+            elements.resultAccuracy.innerText = `${accuracy}%`;
+            elements.resultTime.innerText = `${timeSpent}秒`;
+            elements.resultWrong.innerText = `${total - examCorrectCount}题`;
+
+            // 保存考试统计
+            stats.testsRun += 1;
+            stats.correctSum += examCorrectCount;
+            stats.totalSum += total;
+            localStorage.setItem('examStats', JSON.stringify(stats));
+
+            updateStatsDashboard();
+        }
+
+        elements.btnRestartExam.addEventListener('click', () => {
+            elements.examResult.classList.add('hidden');
+            elements.examConfig.classList.remove('hidden');
+        });
+
+        elements.btnGoWrong.addEventListener('click', () => {
+            elements.examResult.classList.add('hidden');
+            switchTab('wrong');
+        });
+
+        // ------------------ 7. 错题本业务逻辑 ------------------
+        function addWrongDrug(id) {
+            if (!wrongList.includes(id)) {
+                wrongList.push(id);
+                localStorage.setItem('wrongDrugs', JSON.stringify(wrongList));
+                updateStatsDashboard();
+            }
+        }
+
+        function removeWrongDrug(id) {
+            wrongList = wrongList.filter(item => item !== id);
+            localStorage.setItem('wrongDrugs', JSON.stringify(wrongList));
+            updateStatsDashboard();
+            renderWrongSection();
+        }
+
+        function renderWrongSection() {
+            if (wrongList.length === 0) {
+                elements.wrongEmpty.classList.remove('hidden');
+                elements.wrongList.classList.add('hidden');
+                return;
+            }
+
+            elements.wrongEmpty.classList.add('hidden');
+            elements.wrongList.classList.remove('hidden');
+            elements.wrongList.innerHTML = '';
+
+            wrongList.forEach(id => {
+                const drug = DRUG_DATABASE.find(d => d.id === id);
+                if (!drug) return;
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-start";
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded font-medium">${String.fromCharCode(64 + drug.col)}${drug.row}</span>
+                            ${drug.flags.includes('high') ? '<span class="bg-red-50 text-red-500 text-[10px] px-1 rounded font-bold">高危</span>' : ''}
+                        </div>
+                        <h4 class="text-sm font-bold text-slate-800 mt-1">${drug.name}</h4>
+                        <p class="text-xs text-slate-500 mt-0.5">规格数量: ${drug.count} | ${drug.spec}</p>
+                        <p class="text-[11px] text-teal-600 mt-1 bg-teal-50/50 p-1 rounded">💡 记忆法: ${drug.tip}</p>
+                    </div>
+                    <div class="flex flex-col space-y-2 items-end">
+                        <button class="btn-wrong-remove text-emerald-500 hover:text-emerald-700 p-1 text-xs font-semibold hover:bg-emerald-50 rounded transition flex items-center space-x-0.5">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span>消灭</span>
+                        </button>
+                    </div>
+                `;
+
+                card.querySelector('.btn-wrong-remove').onclick = () => removeWrongDrug(drug.id);
+                elements.wrongList.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        elements.btnClearWrong.addEventListener('click', () => {
+            wrongList = [];
+            localStorage.setItem('wrongDrugs', JSON.stringify(wrongList));
+            updateStatsDashboard();
+            renderWrongSection();
+        });
+
+        // ------------------ 8. 选项卡切换控制 ------------------
+        function switchTab(tabId) {
+            currentTab = tabId;
+            
+            // 样式重置
+            const tabs = [elements.tabStudy, elements.tabExam, elements.tabWrong];
+            tabs.forEach(t => {
+                t.classList.remove('text-teal-600', 'bg-teal-50');
+                t.classList.add('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
+            });
+
+            elements.sectionStudy.classList.add('hidden');
+            elements.sectionExam.classList.add('hidden');
+            elements.sectionWrong.classList.add('hidden');
+
+            if (tabId === 'study') {
+                elements.tabStudy.classList.remove('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
+                elements.tabStudy.classList.add('text-teal-600', 'bg-teal-50');
+                elements.sectionStudy.classList.remove('hidden');
+                renderStudyGrid();
+            } else if (tabId === 'exam') {
+                elements.tabExam.classList.remove('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
+                elements.tabExam.classList.add('text-teal-600', 'bg-teal-50');
+                elements.sectionExam.classList.remove('hidden');
+                
+                // 重置到考核准备页
+                elements.examConfig.classList.remove('hidden');
+                elements.examRunning.classList.add('hidden');
+                elements.examResult.classList.add('hidden');
+            } else if (tabId === 'wrong') {
+                elements.tabWrong.classList.remove('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
+                elements.tabWrong.classList.add('text-teal-600', 'bg-teal-50');
+                elements.sectionWrong.classList.remove('hidden');
+                renderWrongSection();
+            }
+        }
+
+        elements.tabStudy.addEventListener('click', () => switchTab('study'));
+        elements.tabExam.addEventListener('click', () => switchTab('exam'));
+        elements.tabWrong.addEventListener('click', () => switchTab('wrong'));
+
+        // 重置所有统计
+        elements.btnResetStats.addEventListener('click', () => {
+            if (confirm("确定要重置所有测试记录、已掌握药品和错题本吗？")) {
+                localStorage.removeItem('knownDrugs');
+                localStorage.removeItem('wrongDrugs');
+                localStorage.removeItem('examStats');
+                knownDrugs = [];
+                wrongList = [];
+                stats = {testsRun: 0, correctSum: 0, totalSum: 0};
+                updateStatsDashboard();
+                renderStudyGrid();
+                renderWrongSection();
+                elements.detailCard.classList.add('hidden');
+            }
+        });
+
+        // ------------------ 9. 初始化启动 ------------------
+        window.onload = function() {
+            lucide.createIcons();
+            updateStatsDashboard();
+            renderStudyGrid();
+            // 默认选中第一个
+            selectDrugItem(DRUG_DATABASE[0]);
+        };
+    </script>
+</body>
+</html>
