@@ -25,6 +25,21 @@
         .grid-cell:active {
             transform: scale(0.97);
         }
+
+        /* 闪卡 3D 翻转动效核心样式 */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .preserve-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen pb-16">
@@ -40,6 +55,11 @@
                 </div>
             </div>
             <div class="flex space-x-2 text-xs">
+                <!-- 声音开关控制按钮 -->
+                <button id="btn-toggle-sound" class="bg-teal-700/60 hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition flex items-center space-x-1 border border-teal-500/30">
+                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                    <span>声音: 开</span>
+                </button>
                 <button id="btn-reset-stats" class="bg-teal-700/60 hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition flex items-center space-x-1 border border-teal-500/30">
                     <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline">重置统计</span>
@@ -91,16 +111,20 @@
 
         <!-- 导航 Tabs -->
         <div class="flex border-b border-slate-200 bg-white p-1 rounded-xl shadow-sm">
-            <button id="tab-study" class="flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-lg text-teal-600 bg-teal-50 flex items-center justify-center space-x-1.5 transition">
-                <i data-lucide="map" class="w-4 h-4"></i>
+            <button id="tab-study" class="flex-1 py-2 px-1 text-xs sm:text-sm font-medium rounded-lg text-teal-600 bg-teal-50 flex items-center justify-center space-x-1 transition">
+                <i data-lucide="map" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 <span>看图学习</span>
             </button>
-            <button id="tab-exam" class="flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-1.5 transition">
-                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+            <button id="tab-flashcard" class="flex-1 py-2 px-1 text-xs sm:text-sm font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-1 transition">
+                <i data-lucide="layers" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                <span>记忆闪卡</span>
+            </button>
+            <button id="tab-exam" class="flex-1 py-2 px-1 text-xs sm:text-sm font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-1 transition">
+                <i data-lucide="graduation-cap" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 <span>科学考核</span>
             </button>
-            <button id="tab-wrong" class="flex-1 py-2 px-2 text-xs sm:text-sm font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-1.5 transition relative">
-                <i data-lucide="clipboard-x" class="w-4 h-4"></i>
+            <button id="tab-wrong" class="flex-1 py-2 px-1 text-xs sm:text-sm font-medium rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center space-x-1 transition relative">
+                <i data-lucide="clipboard-x" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 <span>错题本</span>
                 <span id="wrong-badge" class="hidden absolute top-0.5 right-1 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold scale-90">0</span>
             </button>
@@ -142,7 +166,7 @@
                 
                 <!-- 真正的 100% 宽度自适应容器 -->
                 <div class="grid grid-cols-12 gap-1 bg-slate-200 p-1.5 rounded-xl border border-slate-300">
-                    <!-- 左侧“一层”侧边栏：占 1/12 宽度，在小屏下高度自动协调 -->
+                    <!-- 左侧“一层”侧边栏：占 1/12 宽度 -->
                     <div class="col-span-1 bg-slate-300 rounded-lg flex items-center justify-center font-bold text-slate-600 text-[10px] sm:text-sm py-8 sm:py-0 select-none">
                         <div class="writing-mode-vertical text-center tracking-widest leading-none">一层</div>
                     </div>
@@ -211,7 +235,125 @@
             </div>
         </div>
 
-        <!-- ================= 2. 科学考核模式 (EXAM) ================= -->
+        <!-- ================= 2. 记忆闪卡模式 (FLASHCARD) ================= -->
+        <div id="section-flashcard" class="space-y-4 hidden">
+            <!-- 闪卡顶层控制器 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-500">记忆维度:</span>
+                    <select id="flashcard-mode-select" class="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-teal-500 outline-none">
+                        <option value="name_to_pos">看【药品名称】背【位置/剂量】</option>
+                        <option value="pos_to_name">看【高亮位置】背【药品名称】</option>
+                    </select>
+                </div>
+                <div class="flex items-center space-x-2 justify-between sm:justify-end">
+                    <button id="btn-flashcard-shuffle" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center space-x-1 transition">
+                        <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
+                        <span>乱序卡包</span>
+                    </button>
+                    <span id="flashcard-counter" class="text-xs font-mono font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded">1 / 14</span>
+                </div>
+            </div>
+
+            <!-- 闪卡主体 3D 容器 -->
+            <div class="perspective-1000 w-full max-w-md mx-auto aspect-[3/4] sm:aspect-[4/5] relative h-[420px] cursor-pointer group" id="flashcard-click-area">
+                <div id="flashcard-inner" class="preserve-3d w-full h-full duration-500 relative rounded-2xl shadow-lg border border-slate-150">
+                    
+                    <!-- 1. 卡片正面 -->
+                    <div id="flashcard-front" class="backface-hidden absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-b from-white to-slate-50 p-6 flex flex-col justify-between items-center text-center">
+                        <div class="w-full flex justify-between items-center text-slate-300">
+                            <i data-lucide="heart" class="w-5 h-5"></i>
+                            <span class="text-xs font-mono tracking-widest uppercase text-slate-400 font-semibold">FRONT 密闭正面</span>
+                            <i data-lucide="volume-2" id="flashcard-speak-front" class="w-5 h-5 text-slate-400 hover:text-teal-500 p-0.5 rounded transition"></i>
+                        </div>
+
+                        <!-- 正面主要内容区 -->
+                        <div class="flex-1 flex flex-col justify-center items-center px-4 space-y-4">
+                            <!-- 维度 A: 显示药名 -->
+                            <div id="fc-front-name-area" class="space-y-2">
+                                <h2 id="fc-front-name" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-wide leading-snug">药品名称</h2>
+                                <p id="fc-front-spec" class="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1 rounded-full w-fit mx-auto">剂量规格</p>
+                            </div>
+
+                            <!-- 维度 B: 显示微缩位置图 (用于看图背药名模式) -->
+                            <div id="fc-front-pos-area" class="hidden space-y-4 w-full">
+                                <span id="fc-front-pos-badge" class="px-4 py-1.5 bg-rose-500 text-white text-base rounded-full font-black tracking-widest shadow-md">位置：A1</span>
+                                <p class="text-xs text-slate-400">请联想：在这个红圈格里摆放的是哪种药品？</p>
+                                <!-- 这里会被注入只读位置高光缩略图 -->
+                                <div id="fc-front-minimap" class="w-48 h-36 mx-auto bg-slate-100 p-2 rounded-xl border border-slate-200 grid grid-cols-5 gap-1"></div>
+                            </div>
+                        </div>
+
+                        <div class="text-xs text-slate-400 animate-bounce flex items-center space-x-1">
+                            <i data-lucide="rotate-3d" class="w-3.5 h-3.5"></i>
+                            <span>轻触卡片 翻开背面</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. 卡片背面 -->
+                    <div id="flashcard-back" class="backface-hidden rotate-y-180 absolute inset-0 w-full h-full rounded-2xl bg-slate-800 p-6 flex flex-col justify-between text-white">
+                        <div class="w-full flex justify-between items-center text-slate-400">
+                            <i data-lucide="eye" class="w-5 h-5 text-teal-400"></i>
+                            <span class="text-xs font-mono tracking-widest uppercase text-slate-400 font-semibold">BACK 答案背面</span>
+                            <i data-lucide="volume-2" id="flashcard-speak-back" class="w-5 h-5 text-slate-300 hover:text-teal-400 p-0.5 rounded transition"></i>
+                        </div>
+
+                        <!-- 背面主要内容区 -->
+                        <div class="flex-1 flex flex-col justify-between py-4">
+                            <!-- 背面答案文字 -->
+                            <div class="text-center space-y-1.5">
+                                <h3 id="fc-back-name" class="text-xl sm:text-2xl font-black text-teal-300 tracking-wide">盐酸肾上腺素注射液</h3>
+                                <p id="fc-back-spec" class="text-xs text-slate-400">每支规格为 1mg/ml | 5支</p>
+                                <div class="flex items-center justify-center space-x-1">
+                                    <span class="text-xs px-2.5 py-0.5 bg-rose-600 text-white font-bold rounded" id="fc-back-pos-badge">位置 E4</span>
+                                    <span class="text-[10px] text-slate-400" id="fc-back-coordinates">(第5列, 第4行)</span>
+                                </div>
+                            </div>
+
+                            <!-- 重要核心：车体平面高光缩略图 -->
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-2">
+                                <p class="text-[10px] text-slate-400 text-center font-semibold">急救车空间高光透视</p>
+                                <div class="grid grid-cols-12 gap-1 max-w-[280px] mx-auto bg-slate-950 p-1 rounded-lg border border-slate-800">
+                                    <div class="col-span-1 bg-slate-800 rounded flex items-center justify-center text-[8px] text-slate-500 font-bold select-none">一层</div>
+                                    <!-- 缩略九宫/二十宫格 -->
+                                    <div id="fc-minimap-container" class="col-span-11 grid grid-cols-5 gap-1"></div>
+                                </div>
+                            </div>
+
+                            <!-- 提示词和锦囊 -->
+                            <div class="text-center px-2">
+                                <p id="fc-back-tip" class="text-[11px] text-amber-200/90 leading-relaxed bg-amber-950/40 p-2 rounded-lg border border-amber-900/30">💡 记忆法：通过“肾上腺素配肾上异丙”的位置对比来加深印象。</p>
+                            </div>
+                        </div>
+
+                        <div class="text-xs text-slate-500 text-center">
+                            再次点击卡片 可合上正面
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 闪卡动作把控按钮 -->
+            <div class="max-w-md mx-auto flex justify-between items-center gap-3">
+                <button id="btn-fc-prev" class="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition text-sm">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    <span>上一个</span>
+                </button>
+                
+                <button id="btn-fc-known" class="flex-1 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition text-sm">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    <span id="btn-fc-known-text">标记熟记</span>
+                </button>
+
+                <button id="btn-fc-next" class="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition text-sm">
+                    <span>下一个</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= 3. 科学考核模式 (EXAM) ================= -->
         <div id="section-exam" class="space-y-4 hidden">
             <!-- 考试配置 -->
             <div id="exam-config" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
@@ -323,7 +465,7 @@
             </div>
         </div>
 
-        <!-- ================= 3. 错题本模式 (WRONG) ================= -->
+        <!-- ================= 4. 错题本模式 (WRONG) ================= -->
         <div id="section-wrong" class="space-y-4 hidden">
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                 <div class="flex justify-between items-center mb-3">
@@ -365,7 +507,7 @@
         // ------------------ 1. 核心药品数据库 definition ------------------
         const DRUG_DATABASE = [
             { id: 1, row: 1, col: 1, name: "二羟丙茶碱注射液", count: "5支", spec: "0.3g/2ml", flags: ["high", "shade"], desc: "平喘药。用于支气管哮喘、喘息型支气管炎等。", tip: "高危药且避光。位于 A1 位置（首排左一）" },
-            { id: 2, row: 1, col: 2, name: "盐酸多巴胺注射液", count: "5支", spec: "20mg/2ml", flags: ["high", "shade"], desc: "心血管急救药。用于强心、升压及抗休克治疗。", tip: "高危避光。位于 B1 位置（A1 的右手边）" },
+            { id: 2, row: 1, col: 2, name: "盐酸多巴胺注射液", count: "5支", spec: "20mg/2ml", flags: ["high", "shade"], desc: "心血管急救药。用于强心、升压及抗休克治疗。", tip: "高危避光. 位于 B1 位置（A1 的右手边）" },
             { id: 3, row: 1, col: 3, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此格目前闲置无常备药。", tip: "C1 位置为空置格子" },
             { id: 4, row: 1, col: 4, name: "空置", count: "", spec: "", flags: ["empty"], desc: "此格目前闲置无常备药。", tip: "D1 位置为空置格子" },
             { id: 5, row: 1, col: 5, name: "地塞米松磷酸钠注射液", count: "5支", spec: "5mg/ml", flags: ["shade"], desc: "糖皮质激素。抗炎、抗过敏，常备避光。", tip: "单避光药（不属高危）。位于 E1（首排最右端）" },
@@ -389,6 +531,18 @@
             { id: 20, row: 4, col: 5, name: "盐酸肾上腺素注射液", count: "5支", spec: "1mg/ml", flags: ["high", "shade"], desc: "极重症复苏药。心脏骤停复苏与过敏休克的关键一线药物。", tip: "高危避光。位于黄金右下角 E4 位置，常伴去甲与异丙肾" }
         ];
 
+        // ------------------ 1.5 辅助工具函数 ------------------
+        // 用于对数组进行随机乱序（洗牌算法）
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
         // ------------------ 2. 状态变量 ------------------
         let currentTab = 'study';
         let currentView = 'grid'; // grid 或 list
@@ -396,7 +550,14 @@
         let selectedDrug = DRUG_DATABASE[0];
         let knownDrugs = JSON.parse(localStorage.getItem('knownDrugs') || '[]');
         let wrongList = JSON.parse(localStorage.getItem('wrongDrugs') || '[]');
+        let isSoundEnabled = localStorage.getItem('isSoundEnabled') !== 'false'; // 默认开启声音
         
+        // 闪卡专用状态变量
+        let flashcardList = [];
+        let flashcardIndex = 0;
+        let isFlashcardFlipped = false;
+        let flashcardMode = 'name_to_pos'; // name_to_pos 或 pos_to_name
+
         let examQuestions = [];
         let examCurrentIndex = 0;
         let examCorrectCount = 0;
@@ -424,9 +585,11 @@
             btnMarkKnown: document.getElementById('btn-mark-known'),
             btnMarkText: document.getElementById('btn-mark-text'),
             tabStudy: document.getElementById('tab-study'),
+            tabFlashcard: document.getElementById('tab-flashcard'),
             tabExam: document.getElementById('tab-exam'),
             tabWrong: document.getElementById('tab-wrong'),
             sectionStudy: document.getElementById('section-study'),
+            sectionFlashcard: document.getElementById('section-flashcard'),
             sectionExam: document.getElementById('section-exam'),
             sectionWrong: document.getElementById('section-wrong'),
             wrongBadge: document.getElementById('wrong-badge'),
@@ -434,7 +597,35 @@
             wrongList: document.getElementById('wrong-list'),
             btnClearWrong: document.getElementById('btn-clear-wrong'),
             btnResetStats: document.getElementById('btn-reset-stats'),
+            btnToggleSound: document.getElementById('btn-toggle-sound'),
             
+            // 闪卡 DOM
+            flashcardClickArea: document.getElementById('flashcard-click-area'),
+            flashcardInner: document.getElementById('flashcard-inner'),
+            flashcardFront: document.getElementById('flashcard-front'),
+            flashcardBack: document.getElementById('flashcard-back'),
+            flashcardModeSelect: document.getElementById('flashcard-mode-select'),
+            btnFlashcardShuffle: document.getElementById('btn-flashcard-shuffle'),
+            flashcardCounter: document.getElementById('flashcard-counter'),
+            fcFrontNameArea: document.getElementById('fc-front-name-area'),
+            fcFrontPosArea: document.getElementById('fc-front-pos-area'),
+            fcFrontName: document.getElementById('fc-front-name'),
+            fcFrontSpec: document.getElementById('fc-front-spec'),
+            fcFrontPosBadge: document.getElementById('fc-front-pos-badge'),
+            fcFrontMinimap: document.getElementById('fc-front-minimap'),
+            fcBackName: document.getElementById('fc-back-name'),
+            fcBackSpec: document.getElementById('fc-back-spec'),
+            fcBackPosBadge: document.getElementById('fc-back-pos-badge'),
+            fcBackCoordinates: document.getElementById('fc-back-coordinates'),
+            fcBackTip: document.getElementById('fc-back-tip'),
+            fcMinimapContainer: document.getElementById('fc-minimap-container'),
+            btnFcPrev: document.getElementById('btn-fc-prev'),
+            btnFcNext: document.getElementById('btn-fc-next'),
+            btnFcKnown: document.getElementById('btn-fc-known'),
+            btnFcKnownText: document.getElementById('btn-fc-known-text'),
+            flashcardSpeakFront: document.getElementById('flashcard-speak-front'),
+            flashcardSpeakBack: document.getElementById('flashcard-speak-back'),
+
             // 考试 DOM
             examConfig: document.getElementById('exam-config'),
             examRunning: document.getElementById('exam-running'),
@@ -464,6 +655,9 @@
 
         // ------------------ 4. 双重科学语音朗读系统 ------------------
         function speakText(text) {
+            // 如果用户关闭了声音开关，则直接拦截朗读请求
+            if (!isSoundEnabled) return;
+
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel(); // 终止上一次朗读
                 const utterance = new SpeechSynthesisUtterance(text);
@@ -478,7 +672,6 @@
         function parseSpecToSpeech(countText, specText) {
             if (!specText) return "";
             
-            // 转换常见的单位，使其发音自然，避免 0.25 变成 "0" + "零点二五" 的双零读音
             let processed = specText
                 .replace(/0\.3g/g, "零点三克")
                 .replace(/0\.25g/g, "零点二五克")
@@ -500,6 +693,27 @@
 
             return "每支规格为" + processed;
         }
+
+        // 声音开关切换UI控制
+        function updateSoundButtonUI() {
+            if (isSoundEnabled) {
+                elements.btnToggleSound.innerHTML = `<i data-lucide="volume-2" class="w-3.5 h-3.5"></i><span>声音: 开</span>`;
+                elements.btnToggleSound.className = "bg-teal-700/60 hover:bg-teal-700 px-2.5 py-1.5 rounded-lg transition flex items-center space-x-1 border border-teal-500/30";
+            } else {
+                elements.btnToggleSound.innerHTML = `<i data-lucide="volume-x" class="w-3.5 h-3.5"></i><span>声音: 关</span>`;
+                elements.btnToggleSound.className = "bg-slate-600 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg transition flex items-center space-x-1 border border-slate-500/30";
+            }
+            lucide.createIcons();
+        }
+
+        elements.btnToggleSound.onclick = () => {
+            isSoundEnabled = !isSoundEnabled;
+            localStorage.setItem('isSoundEnabled', isSoundEnabled);
+            updateSoundButtonUI();
+            if (isSoundEnabled) {
+                speakText("声音已开启");
+            }
+        };
 
         // ------------------ 5. 统计看板 ------------------
         function updateStatsDashboard() {
@@ -735,11 +949,190 @@
             });
         });
 
-        // ------------------ 7. 科学考核模式（EXAM） ------------------
-        function shuffle(array) {
-            return array.sort(() => Math.random() - 0.5);
+
+        // ================== 8. 智能记忆闪卡核心逻辑 ==================
+        function initFlashcards() {
+            // 只过滤掉空置，得到真实的14种药
+            flashcardList = DRUG_DATABASE.filter(d => !d.flags.includes('empty'));
+            flashcardIndex = 0;
+            isFlashcardFlipped = false;
+            elements.flashcardInner.classList.remove('rotate-y-180');
+            renderFlashcard();
         }
 
+        // 闪卡翻转核心动作
+        elements.flashcardClickArea.addEventListener('click', (e) => {
+            // 如果点中了朗读按钮，不触发卡片翻转
+            if (e.target.closest('#flashcard-speak-front') || e.target.closest('#flashcard-speak-back')) {
+                return;
+            }
+            isFlashcardFlipped = !isFlashcardFlipped;
+            if (isFlashcardFlipped) {
+                elements.flashcardInner.classList.add('rotate-y-180');
+                // 翻到背面时，自动朗读一次背面剂量规则，增强耳朵联想！
+                const curDrug = flashcardList[flashcardIndex];
+                if (curDrug) {
+                    const voiceText = `${curDrug.name}，${parseSpecToSpeech(curDrug.count, curDrug.spec)}`;
+                    speakText(voiceText);
+                }
+            } else {
+                elements.flashcardInner.classList.remove('rotate-y-180');
+            }
+        });
+
+        // 乱序洗牌
+        elements.btnFlashcardShuffle.onclick = () => {
+            flashcardList = shuffle([...flashcardList]);
+            flashcardIndex = 0;
+            isFlashcardFlipped = false;
+            elements.flashcardInner.classList.remove('rotate-y-180');
+            renderFlashcard();
+            speakText("卡包已随机打乱");
+        };
+
+        // 维度切换
+        elements.flashcardModeSelect.onchange = (e) => {
+            flashcardMode = e.target.value;
+            isFlashcardFlipped = false;
+            elements.flashcardInner.classList.remove('rotate-y-180');
+            renderFlashcard();
+        };
+
+        // 上一个
+        elements.btnFcPrev.onclick = () => {
+            if (flashcardIndex > 0) {
+                flashcardIndex--;
+                isFlashcardFlipped = false;
+                elements.flashcardInner.classList.remove('rotate-y-180');
+                renderFlashcard();
+            } else {
+                speakText("已经是第一张卡片了");
+            }
+        };
+
+        // 下一个
+        elements.btnFcNext.onclick = () => {
+            if (flashcardIndex < flashcardList.length - 1) {
+                flashcardIndex++;
+                isFlashcardFlipped = false;
+                elements.flashcardInner.classList.remove('rotate-y-180');
+                renderFlashcard();
+            } else {
+                speakText("已学完最后一张，可点击乱序重新开始！");
+            }
+        };
+
+        // 标记熟记
+        elements.btnFcKnown.onclick = () => {
+            const curDrug = flashcardList[flashcardIndex];
+            if (!curDrug) return;
+            const idx = knownDrugs.indexOf(curDrug.id);
+            if (idx > -1) {
+                knownDrugs.splice(idx, 1);
+            } else {
+                knownDrugs.push(curDrug.id);
+            }
+            localStorage.setItem('knownDrugs', JSON.stringify(knownDrugs));
+            updateStatsDashboard();
+            renderFlashcard();
+        };
+
+        // 渲染单张闪卡内容
+        function renderFlashcard() {
+            if (flashcardList.length === 0) return;
+            const drug = flashcardList[flashcardIndex];
+            const label = `${String.fromCharCode(64 + drug.col)}${drug.row}`;
+
+            // 1. 计数器更新
+            elements.flashcardCounter.innerText = `${flashcardIndex + 1} / ${flashcardList.length}`;
+
+            // 2. 熟记按钮状态
+            const isKnown = knownDrugs.includes(drug.id);
+            if (isKnown) {
+                elements.btnFcKnownText.innerText = "已熟记";
+                elements.btnFcKnown.className = "flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center space-x-1.5 transition text-sm";
+            } else {
+                elements.btnFcKnownText.innerText = "标记熟记";
+                elements.btnFcKnown.className = "flex-1 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition text-sm";
+            }
+
+            // 3. 区分闪卡正面显隐维度
+            if (flashcardMode === 'name_to_pos') {
+                // 正面：显示名称，背面：显示位置与高光
+                elements.fcFrontNameArea.classList.remove('hidden');
+                elements.fcFrontPosArea.classList.add('hidden');
+
+                elements.fcFrontName.innerText = drug.name;
+                elements.fcFrontSpec.innerText = `${drug.count} | ${drug.spec}`;
+            } else {
+                // 正面：只显示高亮微缩图，背面：揭晓名称
+                elements.fcFrontNameArea.classList.add('hidden');
+                elements.fcFrontPosArea.classList.remove('hidden');
+
+                elements.fcFrontPosBadge.innerText = `未知药品 位置: ${label}`;
+                renderMiniMap(elements.fcFrontMinimap, drug.id, true); // 正面高亮微缩图
+            }
+
+            // 4. 渲染背面所有详细信息
+            elements.fcBackName.innerText = drug.name;
+            elements.fcBackSpec.innerText = `每支规格为 ${drug.spec} | 总计 ${drug.count}`;
+            elements.fcBackPosBadge.innerText = `位置 ${label}`;
+            elements.fcBackCoordinates.innerText = `(第${drug.col}列, 第${drug.row}行)`;
+            elements.fcBackTip.innerText = `💡 记忆锦囊：${drug.tip}`;
+
+            // 5. 渲染背面位置高光缩略图
+            renderMiniMap(elements.fcMinimapContainer, drug.id, false);
+
+            // 挂载闪卡顶部的发音图标
+            elements.flashcardSpeakFront.onclick = (e) => {
+                e.stopPropagation();
+                if (flashcardMode === 'name_to_pos') {
+                    speakText(drug.name);
+                } else {
+                    speakText(`位置：${label.split('').join(' ')}`);
+                }
+            };
+            elements.flashcardSpeakBack.onclick = (e) => {
+                e.stopPropagation();
+                const specVoiceText = `${drug.name}，${parseSpecToSpeech(drug.count, drug.spec)}`;
+                speakText(specVoiceText);
+            };
+
+            lucide.createIcons();
+        }
+
+        // 重要工具：快速绘制无文本、只作高亮的空间微缩缩略图
+        function renderMiniMap(container, highlightDrugId, isFront = false) {
+            container.innerHTML = '';
+            DRUG_DATABASE.forEach(d => {
+                const isEmpty = d.flags.includes('empty');
+                let cellClass = "rounded transition-all duration-300 flex items-center justify-center text-[7px] font-bold font-mono ";
+                
+                if (isEmpty) {
+                    // 空置位统一深灰/浅灰
+                    cellClass += isFront ? "bg-slate-200 border border-slate-300 text-transparent" : "bg-slate-800 text-transparent";
+                } else if (d.id === highlightDrugId) {
+                    // 高光格子，带呼吸和显著高光效果
+                    cellClass += isFront 
+                        ? "bg-rose-500 text-white ring-2 ring-rose-400 animate-pulse border border-rose-600 scale-105" 
+                        : "bg-teal-400 text-slate-900 ring-2 ring-teal-300 animate-pulse scale-105 border border-teal-500";
+                } else {
+                    // 普通格子，虚化弱对比
+                    cellClass += isFront 
+                        ? "bg-slate-100 text-slate-300 border border-slate-200" 
+                        : "bg-slate-800/60 text-slate-600";
+                }
+
+                const miniCell = document.createElement('div');
+                miniCell.className = cellClass;
+                // 显示轻量级的坐标，辅助大脑不看答案建立直觉
+                miniCell.innerText = isEmpty ? '' : `${String.fromCharCode(64 + d.col)}${d.row}`;
+                container.appendChild(miniCell);
+            });
+        }
+
+
+        // ------------------ 8. 科学考核模式（EXAM） ------------------
         elements.btnStartExam.addEventListener('click', () => {
             const mode = document.getElementById('exam-mode-select').value;
             const count = parseInt(document.getElementById('exam-count-select').value);
@@ -782,7 +1175,6 @@
             const drug = current.drug;
             const qNum = examCurrentIndex + 1;
             
-            elements.examProgressText.innerText = `问题 ${qNum} / ${examQuestions.length}`;
             elements.examProgressBar.style.width = `${(qNum / examQuestions.length) * 100}%`;
             elements.examScoreLive.innerText = `得分: ${examCorrectCount}`;
 
@@ -905,7 +1297,6 @@
                     element.classList.remove('bg-white');
                     element.classList.add('bg-emerald-100', 'border-emerald-400', 'text-emerald-700');
                 }
-                // 答对时清脆的声音提示
                 speakText("正确");
             } else {
                 elements.answerFeedback.innerHTML = `<span class="text-rose-600 flex flex-col"><span class="flex items-center"><i data-lucide="x-circle" class="w-4.5 h-4.5 mr-1 fill-rose-50"></i> 错误，答案是：${label}</span><span class="text-[10px] text-slate-400 mt-0.5">即：${drug.name} (${drug.spec})</span></span>`;
@@ -915,8 +1306,21 @@
                 }
                 addWrongDrug(drug.id);
                 
-                // 答错时自动大声播报正确药名及“每支规格为”，加深耳脉错误矫错！
-                const errorVoiceText = `回答错误。正确答案是 ${drug.name}，${parseSpecToSpeech(drug.count, drug.spec)}`;
+                // 针对不同题型，播报不同的错误订正语音
+                let errorVoiceText = "";
+                if (current.type === 'name_to_pos') {
+                    // 当回答错格子位置时，语音播报正确的位置
+                    const posSpelled = label.split('').join(' '); // 间隔读出，如 "E 4" 
+                    errorVoiceText = `回答错误。正确位置是：${posSpelled}`;
+                } else if (current.type === 'name_to_spec') {
+                    // 当剂量规格回答错误时，语音提示正确剂量
+                    const specVoiceText = parseSpecToSpeech(drug.count, drug.spec);
+                    errorVoiceText = `回答错误。正确剂量为：${drug.count}，${specVoiceText}`;
+                } else {
+                    // 默认看图背药品名称
+                    errorVoiceText = `回答错误。正确答案是：${drug.name}`;
+                }
+                
                 setTimeout(() => speakText(errorVoiceText), 400);
             }
 
@@ -1018,7 +1422,6 @@
                     </button>
                 `;
 
-                // 错题卡片内的语音及移除逻辑挂载
                 card.querySelector('.btn-wrong-speak').onclick = (e) => {
                     e.stopPropagation();
                     const wrongVoiceText = `${drug.name}，${parseSpecToSpeech(drug.count, drug.spec)}`;
@@ -1041,13 +1444,14 @@
         // ------------------ 9. 选项卡控制 ------------------
         function switchTab(tabId) {
             currentTab = tabId;
-            const tabs = [elements.tabStudy, elements.tabExam, elements.tabWrong];
+            const tabs = [elements.tabStudy, elements.tabFlashcard, elements.tabExam, elements.tabWrong];
             tabs.forEach(t => {
                 t.classList.remove('text-teal-600', 'bg-teal-50');
                 t.classList.add('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
             });
 
             elements.sectionStudy.classList.add('hidden');
+            elements.sectionFlashcard.classList.add('hidden');
             elements.sectionExam.classList.add('hidden');
             elements.sectionWrong.classList.add('hidden');
 
@@ -1056,6 +1460,11 @@
                 elements.tabStudy.classList.add('text-teal-600', 'bg-teal-50');
                 elements.sectionStudy.classList.remove('hidden');
                 if (currentView === 'grid') renderStudyGrid(); else renderStudyList();
+            } else if (tabId === 'flashcard') {
+                elements.tabFlashcard.classList.remove('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
+                elements.tabFlashcard.classList.add('text-teal-600', 'bg-teal-50');
+                elements.sectionFlashcard.classList.remove('hidden');
+                initFlashcards();
             } else if (tabId === 'exam') {
                 elements.tabExam.classList.remove('text-slate-500', 'hover:text-slate-700', 'hover:bg-slate-50');
                 elements.tabExam.classList.add('text-teal-600', 'bg-teal-50');
@@ -1072,6 +1481,7 @@
         }
 
         elements.tabStudy.addEventListener('click', () => switchTab('study'));
+        elements.tabFlashcard.addEventListener('click', () => switchTab('flashcard'));
         elements.tabExam.addEventListener('click', () => switchTab('exam'));
         elements.tabWrong.addEventListener('click', () => switchTab('wrong'));
 
@@ -1094,6 +1504,7 @@
         window.onload = function() {
             lucide.createIcons();
             updateStatsDashboard();
+            updateSoundButtonUI(); // 初始化加载本地存储的声音开关样式
             renderStudyGrid();
             selectDrugItem(DRUG_DATABASE[0]);
         };
