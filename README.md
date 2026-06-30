@@ -1,8 +1,4 @@
-这是一个为您编写的 GitHub 项目 `README.md` 文档。您可以直接将其保存到项目根目录下，并根据实际部署情况对部分内容进行简单的微调。
 
----
-
-```markdown
 # 药房学习助手统计系统 (Pharmacy Learning Assistant Stats)
 
 ## 项目简介
