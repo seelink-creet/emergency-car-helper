@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>北京医院C06科室 · 急救车学习管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 900px; }
+    th { white-space: nowrap; }
+    td { white-space: nowrap; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <header class="bg-gradient-to-r from-red-800 to-red-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-wide">北京医院C06科室 · 学习管理后台</h1>
+        <p class="text-red-100 text-sm mt-1">急救车药品记忆与考核系统数据总览</p>
+      </div>
+      <div id="user-box" class="hidden items-center gap-2 text-sm">
+        <span id="admin-name" class="bg-white/15 border border-white/20 px-3 py-2 rounded-xl"></span>
+        <button id="btn-logout" class="bg-white text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl font-bold">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <section id="login-panel" class="max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-slate-100 p-6 mt-10">
+      <h2 class="text-xl font-extrabold text-slate-800">管理员登录</h2>
+      <p class="text-sm text-slate-500 mt-1">只允许 user_profiles.role = admin 的账号访问。</p>
+      <div class="mt-5 space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">账号</label>
+          <input id="login-username" class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="例如 y02534" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">密码</label>
+          <input id="login-password" type="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="请输入密码" />
+        </div>
+        <button id="btn-login" class="w-full py-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-bold shadow-lg">登录后台</button>
+        <p id="login-message" class="min-h-[20px] text-center text-sm text-slate-500"></p>
+      </div>
+    </section>
+
+    <section id="dashboard" class="hidden space-y-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <p class="text-xs text-slate-400 font-bold">总人数</p>
+          <p id="stat-users" class="text-3xl font-extrabold mt-1">-</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <p class="text-xs text-slate-400 font-bold">今日登录</p>
+          <p id="stat-today-login" class="text-3xl font-extrabold mt-1">-</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <p class="text-xs text-slate-400 font-bold">已考试人数</p>
+          <p id="stat-exam-users" class="text-3xl font-extrabold mt-1">-</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <p class="text-xs text-slate-400 font-bold">平均正确率</p>
+          <p id="stat-accuracy" class="text-3xl font-extrabold mt-1">-</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="flex flex-wrap gap-2">
+            <button class="tab-btn active-tab px-4 py-2 rounded-xl bg-red-700 text-white font-bold" data-target="user-summary">人员总览</button>
+            <button class="tab-btn px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold" data-target="wrong-ranking">药品错题排行</button>
+            <button class="tab-btn px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold" data-target="weak-drugs">个人薄弱药品</button>
+            <button class="tab-btn px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold" data-target="recent-activity">最近学习动态</button>
+            <button class="tab-btn px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold" data-target="recent-exams">最近考试明细</button>
+          </div>
+          <button id="btn-refresh" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold">刷新数据</button>
+        </div>
+      </div>
+
+      <div id="error-box" class="hidden bg-rose-50 border border-rose-100 text-rose-700 rounded-2xl px-4 py-3 text-sm"></div>
+
+      <section id="user-summary" class="panel bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <h2 class="text-lg font-extrabold mb-3">人员总览</h2>
+        <div id="table-user-summary" class="table-wrap"></div>
+      </section>
+
+      <section id="wrong-ranking" class="panel hidden bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <h2 class="text-lg font-extrabold mb-3">药品错题排行</h2>
+        <div id="table-wrong-ranking" class="table-wrap"></div>
+      </section>
+
+      <section id="weak-drugs" class="panel hidden bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <h2 class="text-lg font-extrabold mb-3">个人薄弱药品</h2>
+        <div id="table-weak-drugs" class="table-wrap"></div>
+      </section>
+
+      <section id="recent-activity" class="panel hidden bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <h2 class="text-lg font-extrabold mb-3">最近学习动态</h2>
+        <div id="table-recent-activity" class="table-wrap"></div>
+      </section>
+
+      <section id="recent-exams" class="panel hidden bg-white rounded-3xl shadow-sm border border-slate-100 p-4">
+        <h2 class="text-lg font-extrabold mb-3">最近考试明细</h2>
+        <div id="table-recent-exams" class="table-wrap"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://ephqfzrusxbcwfmnrgcf.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_EXL9P5fACaQ5m2wtEYJ-Ig_hLn-6d2x";
+    const EMAIL_DOMAIN = "c06.local";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentProfile = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function usernameToEmail(username) {
+      const clean = String(username || "").trim().toLowerCase();
+      return clean.includes("@") ? clean : `${clean}@${EMAIL_DOMAIN}`;
+    }
+
+    function setMessage(text, type = "") {
+      const el = $("login-message");
+      el.textContent = text || "";
+      el.className = "min-h-[20px] text-center text-sm " + (
+        type === "error" ? "text-rose-600 font-semibold" :
+        type === "success" ? "text-emerald-600 font-semibold" :
+        "text-slate-500"
+      );
+    }
+
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return "";
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "boolean") return value ? "是" : "否";
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+        return new Date(value).toLocaleString("zh-CN", { hour12: false });
+      }
+      return value;
+    }
+
+    function renderTable(containerId, rows) {
+      const container = $(containerId);
+      if (!rows || rows.length === 0) {
+        container.innerHTML = '<div class="text-slate-400 text-sm py-6 text-center">暂无数据</div>';
+        return;
+      }
+
+      const columns = Object.keys(rows[0]);
+      const thead = columns.map(col => `<th class="px-3 py-2 text-left text-xs font-bold text-slate-500 bg-slate-50 border-b">${escapeHtml(col)}</th>`).join("");
+      const tbody = rows.map(row => {
+        return `<tr class="hover:bg-slate-50">${columns.map(col => `<td class="px-3 py-2 text-sm border-b border-slate-100">${escapeHtml(formatValue(row[col]))}</td>`).join("")}</tr>`;
+      }).join("");
+
+      container.innerHTML = `<table class="w-full border-separate border-spacing-0"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+    }
+
+    function showError(text) {
+      const el = $("error-box");
+      if (!text) {
+        el.classList.add("hidden");
+        el.textContent = "";
+        return;
+      }
+      el.textContent = text;
+      el.classList.remove("hidden");
+    }
+
+    async function checkAdmin(userId) {
+      const { data, error } = await supabaseClient
+        .from("user_profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error || !data) throw new Error("没有找到用户资料。");
+      if (data.enabled === false) throw new Error("该账号已停用。");
+      if (data.role !== "admin") throw new Error("该账号不是管理员账号，不能访问后台。");
+
+      currentProfile = data;
+      return data;
+    }
+
+    async function handleLogin() {
+      const username = $("login-username").value;
+      const password = $("login-password").value;
+      if (!username || !password) {
+        setMessage("请输入账号和密码。", "error");
+        return;
+      }
+
+      setMessage("正在登录...", "");
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: usernameToEmail(username),
+        password
+      });
+
+      if (error) {
+        setMessage("账号或密码错误。", "error");
+        return;
+      }
+
+      try {
+        const profile = await checkAdmin(data.user.id);
+        setMessage("登录成功。", "success");
+        $("login-panel").classList.add("hidden");
+        $("dashboard").classList.remove("hidden");
+        $("user-box").classList.remove("hidden");
+        $("user-box").classList.add("flex");
+        $("admin-name").textContent = profile.display_name || profile.username;
+        await loadDashboard();
+      } catch (err) {
+        await supabaseClient.auth.signOut();
+        setMessage(err.message || "无权访问后台。", "error");
+      }
+    }
+
+    async function fetchView(viewName, limit = 200) {
+      const { data, error } = await supabaseClient
+        .from(viewName)
+        .select("*")
+        .limit(limit);
+
+      if (error) throw new Error(`${viewName} 查询失败：${error.message}`);
+      return data || [];
+    }
+
+    async function loadDashboard() {
+      showError("");
+      $("btn-refresh").textContent = "刷新中...";
+
+      try {
+        const [summary, wrongRanking, weakDrugs, activity, exams] = await Promise.all([
+          fetchView("v_admin_user_summary", 200),
+          fetchView("v_drug_wrong_ranking", 200),
+          fetchView("v_user_weak_drugs", 200),
+          fetchView("v_recent_activity", 200),
+          fetchView("v_exam_sessions_named", 200)
+        ]);
+
+        renderTable("table-user-summary", summary);
+        renderTable("table-wrong-ranking", wrongRanking);
+        renderTable("table-weak-drugs", weakDrugs);
+        renderTable("table-recent-activity", activity);
+        renderTable("table-recent-exams", exams);
+
+        $("stat-users").textContent = summary.length;
+        const today = new Date().toLocaleDateString("zh-CN");
+        const todayLogin = summary.filter(row => row["最后登录"] && new Date(row["最后登录"]).toLocaleDateString("zh-CN") === today).length;
+        $("stat-today-login").textContent = todayLogin;
+
+        const examUsers = summary.filter(row => row["最近考试"] && row["最近考试"] !== "未考试").length;
+        $("stat-exam-users").textContent = examUsers;
+
+        const accValues = summary
+          .map(row => String(row["正确率"] || "").replace("%", ""))
+          .map(v => Number(v))
+          .filter(v => !Number.isNaN(v));
+        $("stat-accuracy").textContent = accValues.length ? Math.round(accValues.reduce((a,b) => a + b, 0) / accValues.length) + "%" : "-";
+      } catch (err) {
+        showError(err.message || "数据加载失败。请确认已运行 admin SQL，并且当前账号 role=admin。");
+      } finally {
+        $("btn-refresh").textContent = "刷新数据";
+      }
+    }
+
+    async function init() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data.session?.user) {
+        try {
+          const profile = await checkAdmin(data.session.user.id);
+          $("login-panel").classList.add("hidden");
+          $("dashboard").classList.remove("hidden");
+          $("user-box").classList.remove("hidden");
+          $("user-box").classList.add("flex");
+          $("admin-name").textContent = profile.display_name || profile.username;
+          await loadDashboard();
+        } catch (err) {
+          await supabaseClient.auth.signOut();
+        }
+      }
+    }
+
+    $("btn-login").addEventListener("click", handleLogin);
+    $("login-password").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleLogin();
+    });
+    $("btn-refresh").addEventListener("click", loadDashboard);
+    $("btn-logout").addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      location.reload();
+    });
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => {
+          b.classList.remove("bg-red-700", "text-white", "active-tab");
+          b.classList.add("bg-slate-100", "text-slate-600");
+        });
+        btn.classList.add("bg-red-700", "text-white", "active-tab");
+        btn.classList.remove("bg-slate-100", "text-slate-600");
+
+        document.querySelectorAll(".panel").forEach(panel => panel.classList.add("hidden"));
+        $(btn.dataset.target).classList.remove("hidden");
+      });
+    });
+
+    init();
+  </script>
+</body>
+</html>
