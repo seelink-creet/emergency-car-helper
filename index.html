@@ -1813,7 +1813,10 @@ body {
     const EMAIL_DOMAIN = "c06.local";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.c06SupabaseClient = supabaseClient;
     let currentProfile = null;
+    window.c06CurrentProfile = null;
+    window.c06CurrentUser = null;
 
     function $(id) {
         return document.getElementById(id);
@@ -1894,6 +1897,7 @@ body {
         }
 
         currentProfile = data;
+        window.c06CurrentProfile = data;
         return data;
     }
 
@@ -1913,7 +1917,12 @@ body {
     }
 
     async function continueAfterLogin(user, shouldWriteLog) {
+        window.c06CurrentUser = user;
         const profile = await loadProfile(user.id);
+
+        if (window.c06SyncKnownDrugsFromSupabase) {
+            try { await window.c06SyncKnownDrugsFromSupabase(); } catch (e) { console.warn("同步熟记进度失败", e); }
+        }
 
         if (shouldWriteLog) {
             await writeLoginLog(user, profile);
@@ -2019,6 +2028,8 @@ body {
     async function handleLogout() {
         await supabaseClient.auth.signOut();
         currentProfile = null;
+        window.c06CurrentProfile = null;
+        window.c06CurrentUser = null;
         const nameEl = $("current-user-name");
         if (nameEl) {
             nameEl.textContent = "";
@@ -2060,5 +2071,378 @@ body {
         if (window.lucide) lucide.createIcons();
     });
 })();
-</script></body>
+</script>
+<script id="supabase-learning-tracking">
+(function() {
+    let currentExamSessionId = null;
+    let currentExamSessionPromise = null;
+    let currentQuestionStartAt = 0;
+
+    function getClient() {
+        return window.c06SupabaseClient || null;
+    }
+
+    async function getAuthContext() {
+        const supabaseClient = getClient();
+        if (!supabaseClient) return null;
+
+        let user = window.c06CurrentUser;
+        if (!user) {
+            const { data } = await supabaseClient.auth.getUser();
+            user = data?.user || null;
+            if (user) window.c06CurrentUser = user;
+        }
+
+        let profile = window.c06CurrentProfile;
+        if (!profile && user) {
+            const { data } = await supabaseClient
+                .from("user_profiles")
+                .select("*")
+                .eq("id", user.id)
+                .single();
+
+            if (data) {
+                profile = data;
+                window.c06CurrentProfile = data;
+            }
+        }
+
+        if (!user || !profile) return null;
+        return { supabaseClient, user, profile };
+    }
+
+    function getPositionLabel(drug) {
+        if (!drug) return "";
+        return `${String.fromCharCode(64 + drug.col)}${drug.row}`;
+    }
+
+    async function logStudyEvent(eventType, drug, extra) {
+        try {
+            const ctx = await getAuthContext();
+            if (!ctx) return;
+
+            await ctx.supabaseClient.from("study_events").insert({
+                user_id: ctx.user.id,
+                username: ctx.profile.username,
+                display_name: ctx.profile.display_name,
+                department: ctx.profile.department,
+                event_type: eventType,
+                drug_id: drug?.id || null,
+                drug_name: drug?.name || null,
+                position_label: drug ? getPositionLabel(drug) : null,
+                extra: extra || {}
+            });
+        } catch (err) {
+            console.warn("study_events 写入失败：", err);
+        }
+    }
+
+    async function updateDrugProgress(drug, options) {
+        try {
+            if (!drug || drug.flags?.includes("empty")) return;
+
+            const ctx = await getAuthContext();
+            if (!ctx) return;
+
+            const { data: existing } = await ctx.supabaseClient
+                .from("user_drug_progress")
+                .select("*")
+                .eq("user_id", ctx.user.id)
+                .eq("drug_id", drug.id)
+                .maybeSingle();
+
+            const now = new Date().toISOString();
+            const next = {
+                user_id: ctx.user.id,
+                drug_id: drug.id,
+                drug_name: drug.name,
+                position_label: getPositionLabel(drug),
+                known: existing?.known || false,
+                known_at: existing?.known_at || null,
+                view_count: existing?.view_count || 0,
+                speak_count: existing?.speak_count || 0,
+                flashcard_count: existing?.flashcard_count || 0,
+                wrong_count: existing?.wrong_count || 0,
+                correct_count: existing?.correct_count || 0,
+                last_studied_at: now,
+                updated_at: now
+            };
+
+            if (options?.setKnown !== undefined) {
+                next.known = !!options.setKnown;
+                next.known_at = next.known ? now : null;
+            }
+            if (options?.incView) next.view_count += 1;
+            if (options?.incSpeak) next.speak_count += 1;
+            if (options?.incFlashcard) next.flashcard_count += 1;
+            if (options?.incWrong) next.wrong_count += 1;
+            if (options?.incCorrect) next.correct_count += 1;
+
+            await ctx.supabaseClient
+                .from("user_drug_progress")
+                .upsert(next, { onConflict: "user_id,drug_id" });
+        } catch (err) {
+            console.warn("user_drug_progress 更新失败：", err);
+        }
+    }
+
+    window.c06SyncKnownDrugsFromSupabase = async function() {
+        try {
+            const ctx = await getAuthContext();
+            if (!ctx) return;
+
+            const { data, error } = await ctx.supabaseClient
+                .from("user_drug_progress")
+                .select("drug_id, known")
+                .eq("user_id", ctx.user.id)
+                .eq("known", true);
+
+            if (error) throw error;
+
+            if (Array.isArray(data)) {
+                knownDrugs = data.map(item => item.drug_id);
+                localStorage.setItem("knownDrugs", JSON.stringify(knownDrugs));
+                if (typeof updateStatsDashboard === "function") updateStatsDashboard();
+                if (typeof renderStudyGrid === "function" && currentView === "grid") renderStudyGrid();
+                if (typeof renderStudyList === "function" && currentView === "list") renderStudyList();
+            }
+        } catch (err) {
+            console.warn("从 Supabase 同步熟记进度失败：", err);
+        }
+    };
+
+    function getCorrectAnswerText(current) {
+        const drug = current?.drug;
+        if (!drug) return "";
+        if (current.type === "name_to_pos") return getPositionLabel(drug);
+        if (current.type === "pos_to_name") return drug.name;
+        if (current.type === "name_to_spec") return `${drug.count} | ${drug.spec}`;
+        return "";
+    }
+
+    function getUserAnswerText(element) {
+        if (!element) return "";
+        return (element.innerText || element.textContent || "").trim().replace(/\s+/g, " ");
+    }
+
+    async function createExamSession() {
+        try {
+            const ctx = await getAuthContext();
+            if (!ctx || !Array.isArray(examQuestions) || examQuestions.length === 0) return null;
+
+            const modeSelect = document.getElementById("exam-mode-select");
+            const mode = modeSelect ? modeSelect.value : "unknown";
+
+            const { data, error } = await ctx.supabaseClient
+                .from("exam_sessions")
+                .insert({
+                    user_id: ctx.user.id,
+                    username: ctx.profile.username,
+                    display_name: ctx.profile.display_name,
+                    department: ctx.profile.department,
+                    exam_mode: mode,
+                    question_count: examQuestions.length,
+                    correct_count: 0,
+                    wrong_count: 0,
+                    accuracy: 0,
+                    duration_sec: 0,
+                    started_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            currentExamSessionId = data.id;
+            return data.id;
+        } catch (err) {
+            console.warn("exam_sessions 创建失败：", err);
+            return null;
+        }
+    }
+
+    async function ensureExamSession() {
+        if (currentExamSessionId) return currentExamSessionId;
+        if (currentExamSessionPromise) return await currentExamSessionPromise;
+        currentExamSessionPromise = createExamSession();
+        return await currentExamSessionPromise;
+    }
+
+    async function logExamAnswer(current, isCorrect, element) {
+        try {
+            const ctx = await getAuthContext();
+            const sessionId = await ensureExamSession();
+            if (!ctx || !sessionId || !current?.drug) return;
+
+            const drug = current.drug;
+            const responseTimeMs = currentQuestionStartAt ? Date.now() - currentQuestionStartAt : null;
+
+            await ctx.supabaseClient.from("exam_answers").insert({
+                exam_session_id: sessionId,
+                user_id: ctx.user.id,
+                drug_id: drug.id,
+                drug_name: drug.name,
+                position_label: getPositionLabel(drug),
+                question_type: current.type,
+                correct_answer: getCorrectAnswerText(current),
+                user_answer: getUserAnswerText(element),
+                is_correct: !!isCorrect,
+                response_time_ms: responseTimeMs,
+                answered_at: new Date().toISOString()
+            });
+
+            await updateDrugProgress(drug, isCorrect ? { incCorrect: true } : { incWrong: true });
+        } catch (err) {
+            console.warn("exam_answers 写入失败：", err);
+        }
+    }
+
+    async function finishExamSession() {
+        try {
+            const ctx = await getAuthContext();
+            const sessionId = await ensureExamSession();
+            if (!ctx || !sessionId || !Array.isArray(examQuestions) || examQuestions.length === 0) return;
+
+            const total = examQuestions.length;
+            const accuracy = Math.round((examCorrectCount / total) * 100);
+            const timeSpent = Math.round((Date.now() - examStartTime) / 1000);
+
+            await ctx.supabaseClient
+                .from("exam_sessions")
+                .update({
+                    correct_count: examCorrectCount,
+                    wrong_count: total - examCorrectCount,
+                    accuracy,
+                    duration_sec: timeSpent,
+                    finished_at: new Date().toISOString()
+                })
+                .eq("id", sessionId);
+        } catch (err) {
+            console.warn("exam_sessions 更新失败：", err);
+        }
+    }
+
+    window.addEventListener("DOMContentLoaded", function() {
+        // 1. 药品详情查看记录
+        if (typeof selectDrugItem === "function") {
+            const originalSelectDrugItem = selectDrugItem;
+            selectDrugItem = function(drug) {
+                const result = originalSelectDrugItem.apply(this, arguments);
+                logStudyEvent("view_drug_detail", drug);
+                updateDrugProgress(drug, { incView: true });
+                return result;
+            };
+        }
+
+        // 2. 朗读记录
+        document.addEventListener("click", function(e) {
+            if (e.target.closest("#btn-speak")) {
+                logStudyEvent("speak_drug_name", selectedDrug);
+                updateDrugProgress(selectedDrug, { incSpeak: true });
+            }
+            if (e.target.closest("#btn-speak-spec")) {
+                logStudyEvent("speak_drug_spec", selectedDrug);
+                updateDrugProgress(selectedDrug, { incSpeak: true });
+            }
+        }, true);
+
+        // 3. 熟记按钮同步
+        const markBtn = document.getElementById("btn-mark-known");
+        if (markBtn) {
+            markBtn.addEventListener("click", function() {
+                setTimeout(function() {
+                    const isKnown = knownDrugs.includes(selectedDrug.id);
+                    logStudyEvent(isKnown ? "mark_known" : "unmark_known", selectedDrug);
+                    updateDrugProgress(selectedDrug, { setKnown: isKnown });
+                }, 0);
+            });
+        }
+
+        // 4. 闪卡查看与翻转记录
+        if (typeof renderFlashcard === "function") {
+            const originalRenderFlashcard = renderFlashcard;
+            renderFlashcard = function() {
+                const result = originalRenderFlashcard.apply(this, arguments);
+                const drug = flashcardList?.[flashcardIndex];
+                if (drug) {
+                    logStudyEvent("flashcard_view", drug);
+                    updateDrugProgress(drug, { incFlashcard: true });
+                }
+                return result;
+            };
+        }
+
+        const flashArea = document.getElementById("flashcard-click-area");
+        if (flashArea) {
+            flashArea.addEventListener("click", function(e) {
+                if (e.target.closest("#flashcard-speak-front") || e.target.closest("#flashcard-speak-back")) return;
+                const drug = flashcardList?.[flashcardIndex];
+                if (drug) logStudyEvent("flashcard_flip", drug);
+            });
+        }
+
+        const fcKnownBtn = document.getElementById("btn-fc-known");
+        if (fcKnownBtn) {
+            fcKnownBtn.addEventListener("click", function() {
+                setTimeout(function() {
+                    const drug = flashcardList?.[flashcardIndex];
+                    if (!drug) return;
+                    const isKnown = knownDrugs.includes(drug.id);
+                    logStudyEvent(isKnown ? "flashcard_known" : "flashcard_unmark_known", drug);
+                    updateDrugProgress(drug, { setKnown: isKnown });
+                }, 0);
+            });
+        }
+
+        // 5. 考试开始创建 session
+        const startExamBtn = document.getElementById("btn-start-exam");
+        if (startExamBtn) {
+            startExamBtn.addEventListener("click", function() {
+                currentExamSessionId = null;
+                currentExamSessionPromise = null;
+                setTimeout(function() {
+                    currentExamSessionPromise = createExamSession();
+                }, 0);
+            });
+        }
+
+        // 6. 每题计时
+        if (typeof renderQuestion === "function") {
+            const originalRenderQuestion = renderQuestion;
+            renderQuestion = function() {
+                currentQuestionStartAt = Date.now();
+                return originalRenderQuestion.apply(this, arguments);
+            };
+        }
+
+        // 7. 每题答题明细
+        if (typeof submitAnswer === "function") {
+            const originalSubmitAnswer = submitAnswer;
+            submitAnswer = function(isCorrect, element) {
+                const alreadyAnswered = !document.getElementById("btn-next-question")?.classList.contains("hidden");
+                const current = Array.isArray(examQuestions) ? examQuestions[examCurrentIndex] : null;
+
+                const result = originalSubmitAnswer.apply(this, arguments);
+
+                if (!alreadyAnswered && current) {
+                    logExamAnswer(current, isCorrect, element);
+                }
+
+                return result;
+            };
+        }
+
+        // 8. 考试结束更新总成绩
+        if (typeof finishExam === "function") {
+            const originalFinishExam = finishExam;
+            finishExam = function() {
+                const result = originalFinishExam.apply(this, arguments);
+                finishExamSession();
+                return result;
+            };
+        }
+    });
+})();
+</script>
+
+</body>
 </html>
